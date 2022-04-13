@@ -1,3 +1,26 @@
+$ResultByLiveNeighbourCount = @{
+    0 = ".";
+    1 = ".";
+    2 = "?";
+    3 = "*";
+    4 = ".";
+    5 = ".";
+    6 = ".";
+    7 = ".";
+    8 = ".";
+}
+
+function Add-Padding {
+    [CmdletBinding()]
+    param (
+        [Parameter(ValueFromPipeline = $true, Mandatory=$true)]
+        [string]
+        $i
+    )
+
+    "/$i/"
+}
+
 function Invoke-GameOfLife {
     [CmdletBinding()]
     param (
@@ -11,28 +34,23 @@ function Invoke-GameOfLife {
 
     for ($line = 1; $line -lt $oldGeneration.Length - 1; $line++) {
         # prepare lines with padding
-        $lineAbove = "X$($oldGeneration[$line -1])X"
-        $currentLine = "X$($oldGeneration[$line])X"
-        $lineBelow = [string]::new('X', $oldGeneration[0].Length + 2)
-        $lineBelow = "X$($oldGeneration[$line +1])X"
+        $lineAbove = $oldGeneration[$line -1] | Add-Padding
+        $currentLine = $oldGeneration[$line] | Add-Padding
+        $lineBelow = $oldGeneration[$line +1] | Add-Padding
 
         $newLine = ""
         for ($col = 1; $col -le $oldGeneration[0].Length; $col++) {
             $livingCount = Get-AliveCount -lineAbove $lineAbove -currentLine $currentLine -lineBelow $lineBelow -col $col
-            switch ($livingCount) {
-                3 {
-                    $newLine += '*'
-                }
-                2 {
-                    $newLine += $currentLine[$col]
-                }
-                default {
-                    $newLine += '.'
-                }
-            }
+            $newline += $ResultByLiveNeighbourCount[$livingCount].Replace("?", $currentLine[$col])
         }
         $newLine
     }
+}
+
+$LivenessByCharacter = @{
+    [char]"." = 0;
+    [char]"/" = 0;
+    [char]"*" = 1;
 }
 
 function Get-AliveCount {
@@ -47,33 +65,7 @@ function Get-AliveCount {
         [int]
         $col
     )
-    $livingCount = 0
-    if ($lineAbove[$col -1] -eq '*') {
-        $livingCount++
-    }
-    if ($currentLine[$col -1] -eq '*') {
-        $livingCount++
-    }
-    if ($lineBelow[$col -1] -eq '*') {
-        $livingCount++
-    }
-
-    if ($lineAbove[$col] -eq '*') {
-        $livingCount++
-    }
-    if ($lineBelow[$col] -eq '*') {
-        $livingCount++
-    }
-
-    if ($lineAbove[$col +1] -eq '*') {
-        $livingCount++
-    }
-    if ($currentLine[$col +1] -eq '*') {
-        $livingCount++
-    }
-    if ($lineBelow[$col +1] -eq '*') {
-        $livingCount++
-    }
-
-    return $livingCount
+    $LivenessByCharacter[$lineAbove[$col-1]] + $LivenessByCharacter[$lineAbove[$col]] + $LivenessByCharacter[$lineAbove[$col+1]] `
+        + $LivenessByCharacter[$currentLine[$col-1]] + $LivenessByCharacter[$currentLine[$col+1]] `
+        + $LivenessByCharacter[$lineBelow[$col-1]] + $LivenessByCharacter[$lineBelow[$col]] + $LivenessByCharacter[$lineBelow[$col+1]]
 }
