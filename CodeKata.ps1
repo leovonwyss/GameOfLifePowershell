@@ -1,3 +1,5 @@
+$paddingChar = '/'
+$eolChar = '$'
 $ResultByLiveNeighbourCount = @{
     0 = ".";
     1 = ".";
@@ -10,15 +12,119 @@ $ResultByLiveNeighbourCount = @{
     8 = ".";
 }
 
+$LivenessByCharacter = @{
+    [char]"." = 0;
+    [char]$paddingChar = 0;
+    [char]$eolChar = 0;
+    [char]"*" = 1;
+}
+
+$NonPaddingCharacter = @{
+    [char]$paddingChar = 0;
+    [char]$eolChar = 0;
+    [char]"." = 1;
+    [char]"*" = 1;
+}
+
+$KeepAsIsCharacter = @{
+    [char]$paddingChar = 0;
+    [char]$eolChar = 1;
+    [char]"." = 0;
+    [char]"*" = 0;
+}
+
 function Add-Padding {
     [CmdletBinding()]
     param (
         [Parameter(ValueFromPipeline = $true, Mandatory=$true)]
-        [string]
-        $i
+        [string] $i,
+        [Parameter()]
+        [int] $lineLength
     )
 
-    "/$i/"
+    Begin {
+        return [string]::new($paddingChar, $lineLength+2)
+    }
+    Process {
+        return "$paddingChar$i$eolChar"
+    }
+    End {
+        return [string]::new($paddingChar, $lineLength+2)
+    }
+}
+
+function Split-AndCleanString {
+    [CmdletBinding()]
+    param (
+        [Parameter(ValueFromPipeline = $true, Mandatory=$true)]
+        [string] $s
+    )
+
+    $s.Trim($eolChar).Split($eolChar)
+}
+
+function Process-SingleCell {
+    [CmdletBinding()]
+    param (
+        [Parameter(ValueFromPipeline = $true, Mandatory=$true)]
+        [char] $c,
+        [Parameter()]
+        [int] $lineLength,
+        [Parameter()]
+        [string] $fullStream
+    )
+
+    Begin {
+        $currentPosition = 0
+    }
+    Process {
+        $resultCharacterCount = $KeepAsIsCharacter[$c]
+        [string]::new($c, $resultCharacterCount).ToCharArray()
+
+        $resultCharacterCount = $NonPaddingCharacter[$c]
+        [string]::new($c, $resultCharacterCount).ToCharArray() | 
+            Process-SingleCellInternal -fullStream $fullStream -currentPosition $currentPosition -lineLength $lineLength
+
+        $currentPosition++
+    }
+    End {
+    }
+}
+
+function Process-SingleCellInternal {
+    [CmdletBinding()]
+    param (
+        [Parameter(ValueFromPipeline = $true, Mandatory=$true)]
+        [char] $c,
+        [Parameter()]
+        [int] $lineLength,
+        [Parameter()]
+        [int] $currentPosition,
+        [Parameter()]
+        [string] $fullStream
+    )
+
+    Begin {
+        $lineLengthWithPadding = $lineLength+2
+    }
+    Process {
+        $topLeft      = $fullStream[$currentPosition-$lineLengthWithPadding-1]
+        $topCenter    = $fullStream[$currentPosition-$lineLengthWithPadding]
+        $topRight     = $fullStream[$currentPosition-$lineLengthWithPadding+1]
+        $left         = $fullStream[$currentPosition-1]
+        $right        = $fullStream[$currentPosition+1]
+        $bottomLeft   = $fullStream[$currentPosition+$lineLengthWithPadding-1]
+        $bottomCenter = $fullStream[$currentPosition+$lineLengthWithPadding]
+        $bottomRight  = $fullStream[$currentPosition+$lineLengthWithPadding+1]
+
+        $livingCount = $LivenessByCharacter[$topLeft] + $LivenessByCharacter[$topCenter] + $LivenessByCharacter[$topRight] `
+        + $LivenessByCharacter[$left] + $LivenessByCharacter[$right] `
+        + $LivenessByCharacter[$bottomLeft] + $LivenessByCharacter[$bottomCenter] + $LivenessByCharacter[$bottomRight]
+        
+        $ResultByLiveNeighbourCount[$livingCount].Replace("?", $c)
+    }
+    End {
+    }
 }
 
 function Invoke-GameOfLife {
@@ -29,43 +135,13 @@ function Invoke-GameOfLife {
         $oldGeneration
     )
 
-    # add padding on top and bottom
-    $oldGeneration = ,[string]::new('X', $oldGeneration[0].Length) + $oldGeneration + ,[string]::new('X', $oldGeneration[0].Length)
+    $lineLength = $oldGeneration[0].Length
 
-    for ($line = 1; $line -lt $oldGeneration.Length - 1; $line++) {
-        # prepare lines with padding
-        $lineAbove = $oldGeneration[$line -1] | Add-Padding
-        $currentLine = $oldGeneration[$line] | Add-Padding
-        $lineBelow = $oldGeneration[$line +1] | Add-Padding
-
-        $newLine = ""
-        for ($col = 1; $col -le $oldGeneration[0].Length; $col++) {
-            $livingCount = Get-AliveCount -lineAbove $lineAbove -currentLine $currentLine -lineBelow $lineBelow -col $col
-            $newline += $ResultByLiveNeighbourCount[$livingCount].Replace("?", $currentLine[$col])
-        }
-        $newLine
-    }
-}
-
-$LivenessByCharacter = @{
-    [char]"." = 0;
-    [char]"/" = 0;
-    [char]"*" = 1;
-}
-
-function Get-AliveCount {
-    [CmdletBinding()]
-    param (
-        [string]
-        $lineAbove,
-        [string]
-        $currentLine,
-        [string]
-        $lineBelow,
-        [int]
-        $col
-    )
-    $LivenessByCharacter[$lineAbove[$col-1]] + $LivenessByCharacter[$lineAbove[$col]] + $LivenessByCharacter[$lineAbove[$col+1]] `
-        + $LivenessByCharacter[$currentLine[$col-1]] + $LivenessByCharacter[$currentLine[$col+1]] `
-        + $LivenessByCharacter[$lineBelow[$col-1]] + $LivenessByCharacter[$lineBelow[$col]] + $LivenessByCharacter[$lineBelow[$col+1]]
+    $characterStream = $oldGeneration | 
+        Add-Padding -lineLength $lineLength | 
+        Join-String
+    $characterStream.ToCharArray() | 
+        Process-SingleCell -lineLength $lineLength -fullStream $characterStream | 
+        Join-String | 
+        Split-AndCleanString
 }
