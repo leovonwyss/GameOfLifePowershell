@@ -6,34 +6,33 @@ function Invoke-GameOfLife {
         $oldGeneration
     )
 
-    $newGeneration = [string[]]::new($oldGeneration.Length)
-    for ($line = 0; $line -lt $oldGeneration.Length; $line++) {
-        $lineAbove = [string]::new('X', $oldGeneration[0].Length + 2)
-        if ($line -gt 0) {
-            $lineAbove = "X$($oldGeneration[$line -1])X"
-        }
+    # add padding on top and bottom
+    $oldGeneration = ,[string]::new('X', $oldGeneration[0].Length) + $oldGeneration + ,[string]::new('X', $oldGeneration[0].Length)
+
+    for ($line = 1; $line -lt $oldGeneration.Length - 1; $line++) {
+        # prepare lines with padding
+        $lineAbove = "X$($oldGeneration[$line -1])X"
         $currentLine = "X$($oldGeneration[$line])X"
         $lineBelow = [string]::new('X', $oldGeneration[0].Length + 2)
-        if ($line -lt $oldGeneration.Length -1) {
-            $lineBelow = "X$($oldGeneration[$line +1])X"
-        }
+        $lineBelow = "X$($oldGeneration[$line +1])X"
 
+        $newLine = ""
         for ($col = 1; $col -le $oldGeneration[0].Length; $col++) {
             $livingCount = Get-AliveCount -lineAbove $lineAbove -currentLine $currentLine -lineBelow $lineBelow -col $col
             switch ($livingCount) {
                 3 {
-                    $newGeneration[$line] = $newGeneration[$line] + '*'
+                    $newLine += '*'
                 }
                 2 {
-                    $newGeneration[$line] = $newGeneration[$line] + $currentLine[$col]
+                    $newLine += $currentLine[$col]
                 }
                 default {
-                    $newGeneration[$line] = $newGeneration[$line] + '.'
+                    $newLine += '.'
                 }
             }
         }
+        $newLine
     }
-    return $newGeneration
 }
 
 function Get-AliveCount {
